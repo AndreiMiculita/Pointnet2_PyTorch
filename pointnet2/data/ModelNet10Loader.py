@@ -72,7 +72,6 @@ class ModelNet10Cls(data.Dataset):
                     ]
 
                 shape_names = ["_".join(x.split("_")[0:-7]) for x in shape_ids]
-
                 # list of (shape_name, shape_txt_file_path) tuple
                 self.datapath = [
                     (
