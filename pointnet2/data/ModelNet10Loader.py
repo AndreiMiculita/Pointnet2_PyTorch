@@ -11,6 +11,8 @@ import torch
 import torch.utils.data as data
 import tqdm
 
+import open3d as o3d
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -23,38 +25,30 @@ def pc_normalize(pc):
     return pc
 
 
-class ModelNet40Cls(data.Dataset):
+class ModelNet10Cls(data.Dataset):
     def __init__(self, num_points, transforms=None, train=True, download=True):
         super().__init__()
 
         self.transforms = transforms
 
         self.set_num_points(num_points)
-        self._cache = os.path.join(BASE_DIR, "modelnet40_normal_resampled_cache")
+        self._cache = os.path.join(BASE_DIR, "modelnet10_andrei_partial_cache")
 
         if not osp.exists(self._cache):
-            self.folder = "modelnet40_normal_resampled"
+            self.folder = "modelnet10_andrei_partial"
             self.data_dir = os.path.join(BASE_DIR, self.folder)
             self.url = (
                 "https://shapenet.cs.stanford.edu/media/modelnet40_normal_resampled.zip"
             )
 
-            if download and not os.path.exists(self.data_dir):
-                zipfile = os.path.join(BASE_DIR, os.path.basename(self.url))
-                subprocess.check_call(
-                    shlex.split("curl {} -o {}".format(self.url, zipfile))
-                )
-
-                subprocess.check_call(
-                    shlex.split("unzip {} -d {}".format(zipfile, BASE_DIR))
-                )
-
-                subprocess.check_call(shlex.split("rm {}".format(zipfile)))
+            if not os.path.exists(self.data_dir):
+                print("Need data dir!")
+                exit(1)
 
             self.train = train
             self.set_num_points(num_points)
 
-            self.catfile = os.path.join(self.data_dir, "modelnet40_shape_names.txt")
+            self.catfile = os.path.join(self.data_dir, "modelnet10_shape_names.txt")
             self.cat = [line.rstrip() for line in open(self.catfile)]
             self.classes = dict(zip(self.cat, range(len(self.cat))))
 
@@ -66,24 +60,25 @@ class ModelNet40Cls(data.Dataset):
                     shape_ids = [
                         line.rstrip()
                         for line in open(
-                            os.path.join(self.data_dir, "modelnet40_train.txt")
+                            os.path.join(self.data_dir, "modelnet10_train.txt")
                         )
                     ]
                 else:
                     shape_ids = [
                         line.rstrip()
                         for line in open(
-                            os.path.join(self.data_dir, "modelnet40_test.txt")
+                            os.path.join(self.data_dir, "modelnet10_test.txt")
                         )
                     ]
 
-                shape_names = ["_".join(x.split("_")[0:-1]) for x in shape_ids]
+                shape_names = ["_".join(x.split("_")[0:-7]) for x in shape_ids]
+
                 # list of (shape_name, shape_txt_file_path) tuple
                 self.datapath = [
                     (
                         shape_names[i],
                         os.path.join(self.data_dir, shape_names[i], shape_ids[i])
-                        + ".txt",
+                        + ".pcd",
                     )
                     for i in range(len(shape_ids))
                 ]
@@ -91,20 +86,32 @@ class ModelNet40Cls(data.Dataset):
                 with lmdb.open(
                     osp.join(self._cache, split), map_size=1 << 36
                 ) as lmdb_env, lmdb_env.begin(write=True) as txn:
+                    print(len(self.datapath))
+
+                    idx = 0
                     for i in tqdm.trange(len(self.datapath)):
                         fn = self.datapath[i]
-                        point_set = np.loadtxt(fn[1], delimiter=",").astype(np.float32)
-                        cls = self.classes[self.datapath[i][0]]
-                        cls = int(cls)
 
-                        txn.put(
-                            str(i).encode(),
-                            msgpack_numpy.packb(
-                                dict(pc=point_set, lbl=cls), use_bin_type=True
-                            ),
-                        )
 
-            shutil.rmtree(self.data_dir)
+                        point_set = np.asarray(o3d.io.read_point_cloud(fn[1]).points, dtype=np.float32)
+
+                        # Only take point clouds with more than 1e3 points
+                        if point_set.shape[0] > 1e3:
+                            # Pad point_set with 0s up to 6 columns
+                            # point_set = np.pad(point_set, ((0, 0), (0, 6 - point_set.shape[1])), "constant")
+
+                            cls = self.classes[self.datapath[i][0]]
+                            cls = int(cls)
+
+                            txn.put(
+                                str(idx).encode(),
+                                msgpack_numpy.packb(
+                                    dict(pc=point_set, lbl=cls), use_bin_type=True
+                                ),
+                            )
+                            idx += 1
+
+            # shutil.rmtree(self.data_dir)
 
         self._lmdb_file = osp.join(self._cache, "train" if train else "test")
         with lmdb.open(self._lmdb_file, map_size=1 << 36) as lmdb_env:
@@ -129,6 +136,9 @@ class ModelNet40Cls(data.Dataset):
         point_set = point_set[pt_idxs, :]
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
 
+        # Pad point_set with 0s up to 6 columns
+        point_set = np.pad(point_set, ((0, 0), (0, 6 - point_set.shape[1])), "constant")
+
         if self.transforms is not None:
             point_set = self.transforms(point_set)
 
@@ -138,7 +148,7 @@ class ModelNet40Cls(data.Dataset):
         return self._len
 
     def set_num_points(self, pts):
-        self.num_points = min(int(1e4), pts)
+        self.num_points = min(int(1e3), pts)
 
 
 if __name__ == "__main__":
@@ -154,7 +164,7 @@ if __name__ == "__main__":
             d_utils.PointcloudJitter(),
         ]
     )
-    dset = ModelNet40Cls(16, train=True, transforms=transforms)
+    dset = ModelNet10Cls(16, train=True, transforms=transforms)
     print(dset[0][0])
     print(dset[0][1])
     print(len(dset))
