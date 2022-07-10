@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import transforms
 
 import pointnet2.data.data_utils as d_utils
-from pointnet2.data.ModelNet10Loader import ModelNet10Cls
+from pointnet2.data.ModelNetEntropyLoader import ModelNetEntropyLoader
 
 
 def set_bn_momentum_default(bn_momentum):
@@ -60,7 +60,7 @@ class PointNet2ClassificationSSG(pl.LightningModule):
 
         self._build_model()
 
-    def _build_model(self):
+    def _build_model(self, n_sphere_samples=40):
         self.SA_modules = nn.ModuleList()
         self.SA_modules.append(
             PointnetSAModule(
@@ -94,7 +94,7 @@ class PointNet2ClassificationSSG(pl.LightningModule):
             nn.BatchNorm1d(256),
             nn.ReLU(True),
             nn.Dropout(0.5),
-            nn.Linear(256, 10),
+            nn.Linear(256, n_sphere_samples),
         )
 
     def _break_up_pc(self, pc):
@@ -206,10 +206,10 @@ class PointNet2ClassificationSSG(pl.LightningModule):
             ]
         )
 
-        self.train_dset = ModelNet10Cls(
+        self.train_dset = ModelNetEntropyLoader(
             self.hparams["num_points"], transforms=train_transforms, train=True
         )
-        self.val_dset = ModelNet10Cls(
+        self.val_dset = ModelNetEntropyLoader(
             self.hparams["num_points"], transforms=None, train=False
         )
 
