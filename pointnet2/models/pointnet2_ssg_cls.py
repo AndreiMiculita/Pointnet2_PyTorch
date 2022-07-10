@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torchvision import transforms
 
 import pointnet2.data.data_utils as d_utils
-from pointnet2.data.ModelNet40Loader import ModelNet40Cls
+from pointnet2.data.ModelNet10Loader import ModelNet10Cls
 
 
 def set_bn_momentum_default(bn_momentum):
@@ -94,7 +94,7 @@ class PointNet2ClassificationSSG(pl.LightningModule):
             nn.BatchNorm1d(256),
             nn.ReLU(True),
             nn.Dropout(0.5),
-            nn.Linear(256, 40),
+            nn.Linear(256, 10),
         )
 
     def _break_up_pc(self, pc):
@@ -206,10 +206,10 @@ class PointNet2ClassificationSSG(pl.LightningModule):
             ]
         )
 
-        self.train_dset = ModelNet40Cls(
+        self.train_dset = ModelNet10Cls(
             self.hparams["num_points"], transforms=train_transforms, train=True
         )
-        self.val_dset = ModelNet40Cls(
+        self.val_dset = ModelNet10Cls(
             self.hparams["num_points"], transforms=None, train=False
         )
 

@@ -11,7 +11,7 @@ from pointnet2.models.pointnet2_ssg_sem import PointNet2SemSegSSG
 class PointNet2SemSegMSG(PointNet2SemSegSSG):
     def _build_model(self):
         self.SA_modules = nn.ModuleList()
-        c_in = 6
+        c_in = 3
         self.SA_modules.append(
             PointnetSAModuleMSG(
                 npoint=1024,
