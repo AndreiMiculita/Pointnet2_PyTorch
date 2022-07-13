@@ -6,7 +6,6 @@ optimizer:
     bnm_decay: 0.5
     decay_step: 2e4
 
-
 num_points: 4096
 epochs: 200
 batch_size: 32
