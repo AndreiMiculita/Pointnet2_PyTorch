@@ -1,8 +1,5 @@
 import os
 import os.path as osp
-import shlex
-import shutil
-import subprocess
 
 import lmdb
 import msgpack_numpy
@@ -10,6 +7,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 import tqdm
+import pandas as pd
 
 import open3d as o3d
 
@@ -32,7 +30,7 @@ class ModelNetEntropyLoader(data.Dataset):
         self.transforms = transforms
 
         self.set_num_points(num_points)
-        self._cache = os.path.join(BASE_DIR, "modelnet10_andrei_partial_cache")
+        self._cache = os.path.join(BASE_DIR, "modelnet10_andrei_partial_entropy_cache")
 
         if not osp.exists(self._cache):
             self.folder = "modelnet10_andrei_partial"
@@ -51,6 +49,8 @@ class ModelNetEntropyLoader(data.Dataset):
             self.catfile = os.path.join(self.data_dir, "modelnet10_shape_names.txt")
             self.cat = [line.rstrip() for line in open(self.catfile)]
             self.classes = dict(zip(self.cat, range(len(self.cat))))
+
+            entropy_table = pd.read_csv(os.path.join(self.data_dir, "entropy_dataset_mnet10_10samplesfull.csv"))
 
             os.makedirs(self._cache)
 
@@ -71,7 +71,20 @@ class ModelNetEntropyLoader(data.Dataset):
                         )
                     ]
 
+                print("Shape IDs:", shape_ids)
+
                 shape_names = ["_".join(x.split("_")[0:-7]) for x in shape_ids]
+                print("Shape names:", shape_names)
+
+                shape_indexes = ["_".join(x.split("_")[-7:-6]) for x in shape_ids]
+
+                # Convert to int
+                shape_indexes = [int(x) for x in shape_indexes]
+
+                print(set(shape_indexes))
+
+                # exit()
+
                 # list of (shape_name, shape_txt_file_path) tuple
                 self.datapath = [
                     (
@@ -88,9 +101,9 @@ class ModelNetEntropyLoader(data.Dataset):
                     print(len(self.datapath))
 
                     idx = 0
-                    for i in tqdm.trange(len(self.datapath)):
+                    pbar = tqdm.trange(len(self.datapath))
+                    for i in pbar:
                         fn = self.datapath[i]
-
 
                         point_set = np.asarray(o3d.io.read_point_cloud(fn[1]).points, dtype=np.float32)
 
@@ -102,10 +115,24 @@ class ModelNetEntropyLoader(data.Dataset):
                             cls = self.classes[self.datapath[i][0]]
                             cls = int(cls)
 
+                            # Read entropies where shape name and obj_ind match
+                            entropies_for_obj = np.asarray(entropy_table[
+                                (entropy_table["label"] == fn[0])
+                                & (entropy_table["obj_ind"] == shape_indexes[i])
+                            ]["entropy"])
+
+                            # Add tqdm message with entropies
+                            pbar.set_description(f"entr for label {fn[0]} and obj_ind {shape_indexes[i]} {entropies_for_obj}")
+
+                            # print(f"entr for label {fn[0]} and obj_ind {shape_indexes[i]} {entropies_for_obj}")
+                            if entropies_for_obj.shape[0] == 0:
+                                print("No entropies for this object")
+                                exit()
+
                             txn.put(
                                 str(idx).encode(),
                                 msgpack_numpy.packb(
-                                    dict(pc=point_set, lbl=cls), use_bin_type=True
+                                    dict(pc=point_set, lbl=cls, entr=entropies_for_obj), use_bin_type=True
                                 ),
                             )
                             idx += 1
@@ -141,7 +168,11 @@ class ModelNetEntropyLoader(data.Dataset):
         if self.transforms is not None:
             point_set = self.transforms(point_set)
 
-        return point_set, ele["lbl"]
+        # get entropies as float
+        entropies = ele["entr"]
+        entropies = entropies.astype(np.float32)
+
+        return point_set, entropies
 
     def __len__(self):
         return self._len
@@ -163,7 +194,7 @@ if __name__ == "__main__":
             d_utils.PointcloudJitter(),
         ]
     )
-    dset = ModelNet10Cls(16, train=True, transforms=transforms)
+    dset = ModelNetEntropyLoader(16, train=True, transforms=transforms)
     print(dset[0][0])
     print(dset[0][1])
     print(len(dset))
