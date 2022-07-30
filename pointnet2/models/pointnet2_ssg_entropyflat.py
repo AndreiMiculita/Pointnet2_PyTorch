@@ -19,6 +19,29 @@ def set_bn_momentum_default(bn_momentum):
     return fn
 
 
+def custom_mse(predicted, target):
+    """
+    Custom loss function for the entropy estimation task.
+    This is meant for multi-output regression, where each output is a single float.
+    Parameters
+    ----------
+    predicted : torch.Tensor
+    target : torch.Tensor
+    Returns
+    -------
+    torch.Tensor
+    """
+    # Total mse starts at Tensor([0.0]) on same device and same type
+    total_mse = torch.tensor(0.0, device=predicted.device, dtype=predicted.dtype)
+
+    for i in range(target.shape[1]):
+        total_mse += F.mse_loss(predicted[:, i], target[:, i])
+
+    total_mse /= target.shape[1]
+
+    return total_mse
+
+
 class BNMomentumScheduler(lr_sched.LambdaLR):
     def __init__(self, model, bn_lambda, last_epoch=-1, setter=set_bn_momentum_default):
         if not isinstance(model, nn.Module):
@@ -52,7 +75,7 @@ lr_clip = 1e-5
 bnm_clip = 1e-2
 
 
-class PointNet2ClassificationSSG(pl.LightningModule):
+class PointNet2EntropySSG(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
@@ -60,7 +83,7 @@ class PointNet2ClassificationSSG(pl.LightningModule):
 
         self._build_model()
 
-    def _build_model(self, n_sphere_samples=40):
+    def _build_model(self):
         self.SA_modules = nn.ModuleList()
         self.SA_modules.append(
             PointnetSAModule(
@@ -94,7 +117,7 @@ class PointNet2ClassificationSSG(pl.LightningModule):
             nn.BatchNorm1d(256),
             nn.ReLU(True),
             nn.Dropout(0.5),
-            nn.Linear(256, n_sphere_samples),
+            nn.Linear(256, 10),
         )
 
     def _break_up_pc(self, pc):
@@ -126,9 +149,9 @@ class PointNet2ClassificationSSG(pl.LightningModule):
         pc, labels = batch
 
         logits = self.forward(pc)
-        loss = F.cross_entropy(logits, labels)
+        loss = custom_mse(logits, labels)
         with torch.no_grad():
-            acc = (torch.argmax(logits, dim=1) == labels).float().mean()
+            acc = (logits == labels).float().mean()
 
         log = dict(train_loss=loss, train_acc=acc)
 
@@ -138,8 +161,8 @@ class PointNet2ClassificationSSG(pl.LightningModule):
         pc, labels = batch
 
         logits = self.forward(pc)
-        loss = F.cross_entropy(logits, labels)
-        acc = (torch.argmax(logits, dim=1) == labels).float().mean()
+        loss = custom_mse(logits, labels)
+        acc = (logits == labels).float().mean()
 
         return dict(val_loss=loss, val_acc=acc)
 
