@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pointnet2_ops.pointnet2_modules import PointnetSAModule, PointnetSAModuleMSG
 
-from pointnet2.models.pointnet2_ssg_cls import PointNet2ClassificationSSG
+from pointnet2.models.pointnet2_ssg_entropyflat import PointNet2EntropySSG
 
 
-class PointNet2ClassificationMSG(PointNet2ClassificationSSG):
+class PointNet2EntropyMSG(PointNet2EntropySSG):
     def _build_model(self):
         super()._build_model()
 
