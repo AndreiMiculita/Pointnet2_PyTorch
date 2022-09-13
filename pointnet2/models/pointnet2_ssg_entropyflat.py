@@ -150,21 +150,17 @@ class PointNet2EntropySSG(pl.LightningModule):
 
         logits = self.forward(pc)
         loss = custom_mse(logits, labels)
-        with torch.no_grad():
-            acc = (logits == labels).float().mean()
+        log = dict(train_loss=loss)
 
-        log = dict(train_loss=loss, train_acc=acc)
-
-        return dict(loss=loss, log=log, progress_bar=dict(train_acc=acc))
+        return dict(loss=loss, log=log, progress_bar=dict(train_loss=loss))
 
     def validation_step(self, batch, batch_idx):
         pc, labels = batch
 
         logits = self.forward(pc)
         loss = custom_mse(logits, labels)
-        acc = (logits == labels).float().mean()
 
-        return dict(val_loss=loss, val_acc=acc)
+        return dict(val_loss=loss)
 
     def validation_end(self, outputs):
         reduced_outputs = {}

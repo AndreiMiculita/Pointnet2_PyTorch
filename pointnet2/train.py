@@ -32,11 +32,11 @@ def main(cfg):
 
     early_stop_callback = pl.callbacks.EarlyStopping(patience=5)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        monitor="val_acc",
-        mode="max",
+        monitor="val_loss",
+        mode="min",
         save_top_k=2,
         filepath=os.path.join(
-            cfg.task_model.name, "{epoch}-{val_loss:.2f}-{val_acc:.3f}"
+            cfg.task_model.name, "{epoch}-{val_loss:.2f}"
         ),
         verbose=True,
     )
