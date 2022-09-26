@@ -42,6 +42,7 @@ def main(cfg):
     )
     trainer = pl.Trainer(
         gpus=list(cfg.gpus),
+        logger=TensorBoardLogger("tb_logs", name=cfg.task_model.name),
         max_epochs=cfg.epochs,
         early_stop_callback=early_stop_callback,
         checkpoint_callback=checkpoint_callback,
