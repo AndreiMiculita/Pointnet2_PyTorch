@@ -19,29 +19,6 @@ def set_bn_momentum_default(bn_momentum):
     return fn
 
 
-def custom_mse(predicted, target):
-    """
-    Custom loss function for the entropy estimation task.
-    This is meant for multi-output regression, where each output is a single float.
-    Parameters
-    ----------
-    predicted : torch.Tensor
-    target : torch.Tensor
-    Returns
-    -------
-    torch.Tensor
-    """
-    # Total mse starts at Tensor([0.0]) on same device and same type
-    total_mse = torch.tensor(0.0, device=predicted.device, dtype=predicted.dtype)
-
-    for i in range(target.shape[1]):
-        total_mse += F.mse_loss(predicted[:, i], target[:, i])
-
-    total_mse /= target.shape[1]
-
-    return total_mse
-
-
 class BNMomentumScheduler(lr_sched.LambdaLR):
     def __init__(self, model, bn_lambda, last_epoch=-1, setter=set_bn_momentum_default):
         if not isinstance(model, nn.Module):
@@ -149,7 +126,7 @@ class PointNet2EntropySSG(pl.LightningModule):
         pc, labels = batch
 
         logits = self.forward(pc)
-        loss = custom_mse(logits, labels)
+        loss = F.mse_loss(logits, labels)
         log = dict(train_loss=loss)
 
         return dict(loss=loss, log=log, progress_bar=dict(train_loss=loss))
@@ -158,7 +135,7 @@ class PointNet2EntropySSG(pl.LightningModule):
         pc, labels = batch
 
         logits = self.forward(pc)
-        loss = custom_mse(logits, labels)
+        loss = F.mse_loss(logits, labels)
 
         return dict(val_loss=loss)
 
