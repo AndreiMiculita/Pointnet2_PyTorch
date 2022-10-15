@@ -168,8 +168,8 @@ class ModelNetEntropyLoader(data.Dataset):
         if self.transforms is not None:
             point_set = self.transforms(point_set)
 
-        # get entropies as float
-        entropies = ele["entr"]
+        # get entropies as float, divide by the max in the dataset to get a value between 0 and 1
+        entropies = ele["entr"].astype(np.float32) / 5.46
         entropies = entropies.astype(np.float32)
 
         return point_set, entropies
