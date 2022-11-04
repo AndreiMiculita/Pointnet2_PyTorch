@@ -1,9 +1,12 @@
+# https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html
+
 import os
 
-import hydra
 import hydra.experimental
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
+import time
 
 pytest_plugins = ["helpers_namespace"]
 
@@ -11,50 +14,79 @@ hydra.experimental.initialize(
     os.path.join(os.path.dirname(__file__), "pointnet2/config")
 )
 
-ckpt_path = os.path.join(os.path.dirname(__file__), "outputs/cls-ssg/epoch=80-val_loss=1.26-val_acc=0.557.ckpt")
+ckpt_path = os.path.join(os.path.dirname(__file__), "outputs/entr-ssg/epoch=151-val_loss=0.02.ckpt")
 
 
-def get_model(overrides=[]):
-    cfg = hydra.experimental.compose("config.yaml", overrides)
-    return hydra.utils.instantiate(cfg.task_model, cfg)
+overrides = ["task=entr", f"model=ssg", f"model.use_xyz=True"]
+cfg = hydra.experimental.compose("config.yaml", overrides)
+model = hydra.utils.instantiate(cfg.task_model, cfg)
 
+B, N = 4, 2048  # INFO: B is batch size, N is number of points
 
-def _test_loop(model, inputs, labels):
-    # Load weights from ckpt
-    model.load_from_checkpoint(ckpt_path)
+# inputs = torch.randn(B, N, 6).cuda()
+# labels = torch.from_numpy(np.random.randint(0, 3, size=B)).cuda()
+model.cuda()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+# Load weights from ckpt
+model.load_from_checkpoint(ckpt_path)
 
-    prev_loss = 1e10
-    for _ in range(5):
-        optimizer.zero_grad()
-        res = model.training_step((inputs, labels), None)
-        loss = res["loss"]
-        loss.backward()
-        optimizer.step()
+model.prepare_data()
+data_loader = model.val_dataloader()
 
-        print(loss.item())
+# Run inference
+model.eval()
 
-        assert loss.item() < prev_loss + 1.0, "Loss spiked upwards"
+print("Running inference...")
+# Only do first 10 batches
+for i, batch in enumerate(data_loader):
+    if i < 40:
+        continue
+    if i > 50:
+        break
 
-        prev_loss = loss.item()
+    # model.validation_step(batch, i)
+    # break
 
+    print(batch[0].shape)
+    print(batch[1].shape)
+    print(batch[1])
 
-# @pytest.mark.parametrize("use_xyz", ["True", "False"])
-# @pytest.mark.parametrize("model", ["ssg", "msg"])
-def test_cls(use_xyz, model):
-    model = get_model(
-        ["task=cls", f"model={model}", f"model.use_xyz={use_xyz}"]
-    )
+    # Show all items in batch as 3d scatter plots, fit plots to point cloud
+    for i in range(batch[0].shape[0]):
+        ax = plt.axes(projection='3d')
+        ax.scatter3D(batch[0][i, :, 0], batch[0][i, :, 1], batch[0][i, :, 2])
+        ax.set_box_aspect([1, 1, 1])
+        ax.set_xlim(-2, 2)
+        ax.set_ylim(-2, 2)
+        ax.set_zlim(-2, 2)
+        # plt.show()
 
-    B, N = 4, 2048  # INFO: B is batch size, N is number of points
+    # Compare labels to predictions
+    inputs, labels = batch
+    inputs = inputs.cuda()
 
-    inputs = torch.randn(B, N, 6).cuda()
-    labels = torch.from_numpy(np.random.randint(0, 3, size=B)).cuda()
+    for i in range(inputs.shape[0]):
+        # Run inference, display every layer's output
+        start = time.time()
+        logits = model(inputs[i:i+1, :, :])
+        end = time.time()
+        print(f'time{end - start}')
+        # print("logits" + str(logits))
+        # print("labels" + str(labels[i:i+1, :]))
+        # print("")
+        # print("xyz" + str(xyz))
+        # print("features" + str(features))
 
-    model.cuda()
-    _test_loop(model, inputs, labels)  # TODO: change this to a single test
+    # labels = torch.argmax(labels, dim=1)
+    # preds = torch.argmax(preds, dim=1)
 
+    # Set display to show full width in terminal, avoid scientific notation
+    np.set_printoptions(linewidth=500, suppress=True)
+    torch.set_printoptions(linewidth=500, sci_mode=False)
 
-if __name__ == "__main__":
-    test_cls("True", "ssg")
+    # import code; code.interact(local=locals())
+
+    # Print labels and predictions with names
+    print("Inputs:", inputs)
+    print("Labels:", labels)
+    print("Predictions: ", logits)
