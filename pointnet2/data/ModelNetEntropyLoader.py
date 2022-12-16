@@ -156,8 +156,10 @@ class ModelNetEntropyLoader(data.Dataset):
 
         point_set = ele["pc"]
 
-        pt_idxs = np.arange(0, self.num_points)
+        # num_points random points from the point set
+        pt_idxs = np.arange(0, point_set.shape[0])
         np.random.shuffle(pt_idxs)
+        pt_idxs = pt_idxs[: self.num_points]
 
         point_set = point_set[pt_idxs, :]
         point_set[:, 0:3] = pc_normalize(point_set[:, 0:3])
