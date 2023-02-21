@@ -1,4 +1,6 @@
+import hashlib
 import os
+import time
 
 import hydra
 import omegaconf
@@ -30,13 +32,18 @@ def hydra_params_to_dotdict(hparams):
 def main(cfg):
     model = hydra.utils.instantiate(cfg.task_model, hydra_params_to_dotdict(cfg))
 
+    # generate a unique hash to save checkpoints, based on the checksum of the starting time
+    # this is useful to avoid overwriting checkpoints when running multiple experiments
+
+    exp_hash = hashlib.md5(str(time.time()).encode()).hexdigest()[0:8]
+
     early_stop_callback = pl.callbacks.EarlyStopping(patience=5)
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor="val_loss",
         mode="min",
         save_top_k=2,
         filepath=os.path.join(
-            cfg.task_model.name, "{epoch}-{val_loss:.2f}"
+            cfg.task_model.name, exp_hash + "-{epoch}-{val_loss:.4f}"
         ),
         verbose=True,
     )
