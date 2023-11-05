@@ -1,3 +1,8 @@
+Note from Andrei: This repo is used in connection with my main thesis repo at https://github.com/AndreiMiculita/nbv_mevs
+
+**Thesis Report PDF: https://drive.google.com/file/d/1bxV0k1IZEmBeeNDRbrTXAjw1fXbQj_C8/view** (soon to be published at https://fse.studenttheses.ub.rug.nl/31411/)
+
+
 Pointnet2/Pointnet++ PyTorch
 ============================
 
